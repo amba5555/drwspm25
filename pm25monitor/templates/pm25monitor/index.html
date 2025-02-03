@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live PM2.5 Monitoring</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌫️</text></svg>">
+    <style>
+        .container {
+            text-align: center;
+            margin: 50px auto;
+            max-width: 800px;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .value {
+            font-size: 4em;
+            color: #2c3e50;
+            margin: 20px 0;
+        }
+        .timestamp, .avg {
+            color: #7f8c8d;
+            font-size: 1.2em;
+            margin: 15px 0;
+        }
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .loading {
+            color: #3498db;
+            font-style: italic;
+        }
+        .status-box {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px auto;
+            max-width: 400px;
+        }
+        .good { background: #27ae60; color: white; }
+        .moderate { background: #f1c40f; color: black; }
+        .unhealthy-sens { background: #e67e22; color: white; }
+        .unhealthy { background: #e74c3c; color: white; }
+        .very-unhealthy { background: #8e44ad; color: white; }
+        .hazardous { background: #7f8d8d; color: white; }
+        .unit::after {
+            content: ' µg/m³';
+            font-size: 0.5em;
+            vertical-align: super;
+        }
+        .guideline-note {
+            font-size: 0.9em;
+            color: #95a5a6;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Current PM2.5 Level</h1>
+        <div id="pm25-value" class="value unit">--</div>
+        <div id="timestamp" class="timestamp">Last updated: --</div>
+        
+        <h2>24-Hour Average</h2>
+        <div id="avg-pm25" class="avg unit">--</div>
+        <div class="guideline-note">
+            WHO recommended 24h average: ≤15 µg/m³<br>
+            US AQI 24h limit (Good): ≤12 µg/m³
+        </div>
+
+        <div id="aqi-status" class="status-box"></div>
+        <div id="error-message" class="error" role="alert" aria-live="assertive"></div>
+    </div>
+
+    <script>
+        // US AQI Thresholds (PM2.5 24h avg)
+        const AQI_THRESHOLDS = [
+            { max: 12.0, category: 'Good', color: 'good', aqiMax: 50 },
+            { max: 35.4, category: 'Moderate', color: 'moderate', aqiMax: 100 },
+            { max: 55.4, category: 'Unhealthy (Sensitive)', color: 'unhealthy-sens', aqiMax: 150 },
+            { max: 150.4, category: 'Unhealthy', color: 'unhealthy', aqiMax: 200 },
+            { max: 250.4, category: 'Very Unhealthy', color: 'very-unhealthy', aqiMax: 300 },
+            { max: Infinity, category: 'Hazardous', color: 'hazardous', aqiMax: 500 }
+        ];
+
+        function calculateAQI(pm25) {
+            const threshold = AQI_THRESHOLDS.find(t => pm25 <= t.max);
+            const prevThreshold = AQI_THRESHOLDS[AQI_THRESHOLDS.indexOf(threshold) - 1];
+            
+            // Linear AQI calculation
+            const aqi = Math.ceil(
+                ((threshold.aqiMax - (prevThreshold?.aqiMax || 0)) / 
+                (threshold.max - (prevThreshold?.max || 0))) * 
+                (pm25 - (prevThreshold?.max || 0)) + 
+                (prevThreshold?.aqiMax || 0)
+            );
+
+            return {
+                category: threshold.category,
+                color: threshold.color,
+                value: aqi > threshold.aqiMax ? threshold.aqiMax : aqi
+            };
+        }
+
+        async function updatePM25() {
+            const elements = {
+                pm25: document.getElementById('pm25-value'),
+                timestamp: document.getElementById('timestamp'),
+                avg: document.getElementById('avg-pm25'),
+                aqi: document.getElementById('aqi-status'),
+                error: document.getElementById('error-message')
+            };
+
+            // Reset states
+            elements.pm25.textContent = '...';
+            elements.avg.textContent = '...';
+            elements.aqi.textContent = '';
+            elements.error.textContent = '';
+
+            try {
+                const response = await fetch(`/get-pm25/?_=${Date.now()}`);
+                if (!response.ok) throw new Error('Server error');
+                
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                if (typeof data.avg_pm25 !== 'number' || data.avg_pm25 < 0) {
+                    throw new Error('Invalid air quality data');
+                }
+
+                // Update current reading
+                elements.pm25.textContent = data.pm25 ?? 'N/A';
+                
+                // Update timestamp with timezone
+                elements.timestamp.textContent = `Last updated: ${
+                    data.timestamp ? 
+                    new Date(data.timestamp).toLocaleString('en-US', { timeZoneName: 'short' }) : 
+                    'Unknown time'
+                }`;
+
+                // Update average with WHO comparison
+                const avg = data.avg_pm25.toFixed(1);
+                elements.avg.textContent = avg;
+                elements.avg.style.color = avg > 15 ? '#e74c3c' : '#27ae60';
+
+                // Calculate and display US AQI
+                if (data.avg_pm25 >= 0) {
+                    const aqi = calculateAQI(data.avg_pm25);
+                    elements.aqi.textContent = `US AQI: ${aqi.value} (${aqi.category})`;
+                    elements.aqi.className = `status-box ${aqi.color}`;
+                }
+                
+            } catch (error) {
+                elements.error.textContent = error.message.includes('Server') ? 
+                    'Service unavailable - try refreshing' : 
+                    'Temporary data issue';
+                elements.pm25.textContent = elements.avg.textContent = '--';
+                elements.aqi.textContent = '';
+            }
+        }
+
+        // Update every 30 seconds
+        setInterval(updatePM25, 30000);
+        updatePM25();
+    </script>
+</body>
+</html>
