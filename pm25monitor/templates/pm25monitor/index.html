@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Live PM2.5 Monitoring</title>
+    <title>DRWS:Live PM2.5 Reading</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌫️</text></svg>">
     <style>
         .container {
@@ -57,13 +57,16 @@
     <div class="container">
         <h1>Current PM2.5 Level</h1>
         <div id="pm25-value" class="value unit">--</div>
-        <div id="timestamp" class="timestamp">Last updated: --</div>
+        <!-- Separate elements for date and time -->
+        <div id="date" class="timestamp">Date: --</div>
+        <div id="time" class="timestamp">Time: --</div>
         
-        <h2>24-Hour Average</h2>
+        <h2>ค่าเฉลี่ย 24 ชั่วโมง (24-Hour Average)</h2>
         <div id="avg-pm25" class="avg unit">--</div>
         <div class="guideline-note">
-            WHO recommended 24h average: ≤15 µg/m³<br>
-            US AQI 24h limit (Good): ≤12 µg/m³
+            ค่ามาตรฐานองกรณ์อนามัยโลก (WHO): ไม่เกิน 15 µg/m³<br>
+            ค่ามาตรฐาน US AQI: ไม่เกิน 12 µg/m³<br>
+            ค่ามาตรฐานกรมควบคุมมลพิษไทย ไม่เกิน 37.5 µg/m³
         </div>
 
         <div id="aqi-status" class="status-box"></div>
@@ -75,7 +78,7 @@
         const AQI_THRESHOLDS = [
             { max: 12.0, category: 'Good', color: 'good', aqiMax: 50 },
             { max: 35.4, category: 'Moderate', color: 'moderate', aqiMax: 100 },
-            { max: 55.4, category: 'Unhealthy (Sensitive)', color: 'unhealthy-sens', aqiMax: 150 },
+            { max: 55.4, category: 'Unhealthy for Sensitive', color: 'unhealthy-sens', aqiMax: 150 },
             { max: 150.4, category: 'Unhealthy', color: 'unhealthy', aqiMax: 200 },
             { max: 250.4, category: 'Very Unhealthy', color: 'very-unhealthy', aqiMax: 300 },
             { max: Infinity, category: 'Hazardous', color: 'hazardous', aqiMax: 500 }
@@ -103,7 +106,8 @@
         async function updatePM25() {
             const elements = {
                 pm25: document.getElementById('pm25-value'),
-                timestamp: document.getElementById('timestamp'),
+                date: document.getElementById('date'),
+                time: document.getElementById('time'),
                 avg: document.getElementById('avg-pm25'),
                 aqi: document.getElementById('aqi-status'),
                 error: document.getElementById('error-message')
@@ -111,6 +115,8 @@
 
             // Reset states
             elements.pm25.textContent = '...';
+            elements.date.textContent = 'Date: ...';
+            elements.time.textContent = 'Time: ...';
             elements.avg.textContent = '...';
             elements.aqi.textContent = '';
             elements.error.textContent = '';
@@ -121,24 +127,20 @@
                 
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
-                if (typeof data.avg_pm25 !== 'number' || data.avg_pm25 < 0) {
-                    throw new Error('Invalid air quality data');
-                }
-
+                
                 // Update current reading
                 elements.pm25.textContent = data.pm25 ?? 'N/A';
+                elements.date.textContent = `Date: ${data.date}`;
+                elements.time.textContent = `Time: ${data.time}`;
                 
-                // Update timestamp with timezone
-                elements.timestamp.textContent = `Last updated: ${
-                    data.timestamp ? 
-                    new Date(data.timestamp).toLocaleString('en-US', { timeZoneName: 'short' }) : 
-                    'Unknown time'
-                }`;
-
-                // Update average with WHO comparison
-                const avg = data.avg_pm25.toFixed(1);
-                elements.avg.textContent = avg;
-                elements.avg.style.color = avg > 15 ? '#e74c3c' : '#27ae60';
+                // Update average PM2.5 and adjust color based on WHO guideline
+                if (typeof data.avg_pm25 === 'number') {
+                    const avg = data.avg_pm25.toFixed(1);
+                    elements.avg.textContent = avg;
+                    elements.avg.style.color = avg > 15 ? '#e74c3c' : '#27ae60';
+                } else {
+                    elements.avg.textContent = 'N/A';
+                }
 
                 // Calculate and display US AQI
                 if (data.avg_pm25 >= 0) {
@@ -152,6 +154,8 @@
                     'Service unavailable - try refreshing' : 
                     'Temporary data issue';
                 elements.pm25.textContent = elements.avg.textContent = '--';
+                elements.date.textContent = 'Date: --';
+                elements.time.textContent = 'Time: --';
                 elements.aqi.textContent = '';
             }
         }
