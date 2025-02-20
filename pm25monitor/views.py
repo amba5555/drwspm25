@@ -4,6 +4,8 @@ import requests
 from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.views.decorators.clickjacking import xframe_options_exempt
+
 
 GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzdVmaCSMkEcwmrA70U4IFKKY2GX01OPJIUXs_Eye-zkG-1UYbCglbk8LmCXIyPAneEg/exec'
 
@@ -29,3 +31,6 @@ def get_pm25(request):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+def widget(request):
+    return render(request, 'pm25monitor/widget.html')

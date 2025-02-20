@@ -23,4 +23,6 @@ urlpatterns = [
     path('', views.index, name='index'),  # This should match your view function
     path('get-pm25/', views.get_pm25, name='get_pm25'),
     path('admin/', admin.site.urls),
+    path('widget/', views.widget, name='widget'),  # New widget page
+
 ]

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PM2.5 Widget</title>
+  <style>
+    body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    .widget-container { padding: 10px; text-align: center; }
+    .value { font-size: 2.5em; color: #2c3e50; }
+    .unit { font-size: 0.4em; color: #7f8c8d; }
+    h2 { color: #34495e; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="widget-container">
+    <h2>ค่าฝุ่น PM2.5 ของโรงเรียน</h2>
+    <div class="value">
+      <span id="pm25-value">--</span>
+      <span class="unit">µg/m³</span>
+    </div>
+  </div>
+
+  <script>
+    async function updatePM25() {
+      try {
+        const response = await fetch('/get-pm25/?_=' + new Date().getTime());
+        if (!response.ok) throw new Error('Server error');
+        const data = await response.json();
+        document.getElementById('pm25-value').textContent = data.pm25 !== undefined ? data.pm25 : 'N/A';
+      } catch(e) {
+        document.getElementById('pm25-value').textContent = 'Error';
+      }
+    }
+
+    updatePM25();
+    setInterval(updatePM25, 30000); // Update every 30 seconds.
+  </script>
+</body>
+</html>
